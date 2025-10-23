@@ -13,9 +13,23 @@ For Render, you can point the start command at `api.index:app`.
 from fastapi import FastAPI, Request, HTTPException, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
-from urllib.parse import quote
-import json
-import os
+# Determine the path to the JSON file that stores slug → destination mappings.
+#
+# When running locally (or on platforms like Render), the mappings are persisted
+# in the repository at ``../mapping.json`` relative to this file. However,
+# Vercel’s serverless runtime mounts the project directory as read‑only, so
+# writing to a file in the repo will cause an ``OSError``. To support
+# persisting data in that environment, we default to using a writable
+# location under ``/tmp`` where Vercel allows read/write access. You can
+# override this behaviour by defining the ``DATA_FILE`` environment variable.
+BASE_DATA_FILE = os.path.join(os.path.dirname(__file__), '..', 'mapping.json')
+DATA_FILE = os.environ.get('DATA_FILE', '/tmp/mapping.json')
+
+# Ensure there is a writable copy of the base mappings in the runtime
+# environment. On Vercel, ``/tmp`` is the only writable directory; we copy
+# the repository’s mapping file there on first load if it doesn’t exist yet.
+import shutil
+
 
 # Create a FastAPI application instance
 app = FastAPI()
@@ -28,19 +42,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Path to the JSON file that stores slug → destination mappings
-DATA_FILE = os.path.join(os.path.dirname(__file__), '..', 'mapping.json')
+ def load_mappings() -> dict:
+      """Load existing slug mappings from the JSON file (or return empty dict)."""
+    # If the data file does not exist in the writable location, attempt to
+    # bootstrap it from the base (read-only) mapping file. This ensures that
+    # existing mappings are preserved even in a serverless environment. If the
 
+    if not os.path.exists(DATA_FILE) and os.path.exists(BASE_DATA_FILE):
+        try:
+            # Copy base file to the writable location. Use ``copyfile``
+            # instead of ``copy`` to avoid copying file permissions that might
+            # be incompatible.
+            shutil.copyfile(BASE_DATA_FILE, DATA_FILE)
+        except Exception:
+            # Ignore copy errors and treat as if no mappings exist
+            pass
 
-def load_mappings() -> dict:
-    """Load existing slug mappings from the JSON file (or return empty dict)."""
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except json.JSONDecodeError:
-            # If the JSON file is empty or malformed, reset to empty dict
+        except Exception:
+            # If the JSON file is empty, malformed or unreadable, reset to empty dict
             return {}
+    return {}
+
+  
     return {}
 
 

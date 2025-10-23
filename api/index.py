@@ -41,15 +41,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
- def load_mappings() -> dict:
+def fload_mappings() -> dict:
       """Load existing slug mappings from the JSON file (or return empty dict)."""
     # If the data file does not exist in the writable location, attempt to
     # bootstrap it from the base (read-only) mapping file. This ensures that
     # existing mappings are preserved even in a serverless environment. If the
 
     if not os.path.exists(DATA_FILE) and os.path.exists(BASE_DATA_FILE):
-        try:
+      try:
             # Copy base file to the writable location. Use ``copyfile``
             # instead of ``copy`` to avoid copying file permissions that might
             # be incompatible.

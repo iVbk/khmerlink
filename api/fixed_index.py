@@ -39,50 +39,111 @@ def save_mappings(data: dict) -> None:
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request, message: str = None, error: str = None) -> HTMLResponse:
     """
-    Render a simple HTML form for creating new short links.
+    Render the main page with a form to create short links.
 
     Parameters:
     - message: success message to display
     - error: error message to display (e.g., slug already exists)
     """
-    html_template = """
+    html_template = '''
     <!DOCTYPE html>
     <html lang="km">
     <head>
         <meta charset="UTF-8">
-        <title>KhmerLink URL Shortener</title>
+        <title>KhmerLink – URL Shortener</title>
+        <style>
+            body {
+                font-family: system-ui, Khmer UI, Arial, sans-serif;
+                background-color: #f7f7f7;
+                color: #333;
+                margin: 0;
+                padding: 0;
+            }
+            .container {
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+            }
+            h1 {
+                text-align: center;
+                margin-bottom: 24px;
+            }
+            form {
+                margin-bottom: 16px;
+            }
+            input[type="text"], input[type="url"] {
+                width: 100%;
+                padding: 12px 14px;
+                margin-bottom: 12px;
+                border-radius: 8px;
+                border: 1px solid #ccc;
+                font-size: 16px;
+            }
+            button {
+                padding: 12px 20px;
+                background-color: #5ee2a0;
+                border: none;
+                border-radius: 8px;
+                color: #04130a;
+                font-size: 16px;
+                cursor: pointer;
+            }
+            button:hover {
+                background-color: #45c88f;
+            }
+            .message {
+                padding: 12px 16px;
+                border-radius: 6px;
+                margin-top: 12px;
+            }
+            .success {
+                background-color: #e6f5ef;
+                color: #2b7a4b;
+            }
+            .error {
+                background-color: #fcebea;
+                color: #a94442;
+            }
+        </style>
     </head>
     <body>
-        <h1>KhmerLink</h1>
-        <form method="post" action="/create">
-            <label for="slug">ខ្ងិ សត្ពក្រ (Khmer short word):</label><br>
-            <input type="text" id="slug" name="slug" required><br><br>
-            <label for="url">Destination URL:</label><br>
-            <input type="url" id="url" name="url" required><br><br>
-            <button type="submit">Create Link</button>
-        </form>
-        {message_block}
-        {error_block}
+        <div class="container">
+            <h1>KhmerLink</h1>
+            <form method="post" action="/create">
+                <input type="text" id="slug" name="slug" placeholder="ខឍឲលែ កុងតាក៊ិស (Khmer short word)" required>
+                <input type="url" id="url" name="url" placeholder="Destination URL" required>
+                <button type="submit">Create Link</button>
+            </form>
+            {{MESSAGE_BLOCK}}
+            {{ERROR_BLOCK}}
+        </div>
     </body>
     </html>
-    """
-    message_block = f"<p style='color:green;'>{message}</p>" if message else ""
-    error_block = f"<p style='color:red;'>{error}</p>" if error else ""
-    return HTMLResponse(html_template.format(message_block=message_block, error_block=error_block))
+    '''
+    message_block = f"<div class='message success'>{message}</div>" if message else ""
+    error_block = f"<div class='message error'>{error}</div>" if error else ""
+    html = html_template.replace('{{MESSAGE_BLOCK}}', message_block).replace('{{ERROR_BLOCK}}', error_block)
+    return HTMLResponse(html)
 
 
 @app.post("/create", response_class=HTMLResponse)
 async def create_link(
     request: Request,
     slug: str = Form(...),
-    url: str = Form(...)
+    url: str = Form(...),
 ) -> HTMLResponse:
+    """
+    Handle form submissions to create a new short link.
+
+    If the slug already exists, an error message is returned.
+    Otherwise, the mapping is saved and a success message with the new URL is shown.
+    """
     slug = slug.strip()
     url = url.strip()
 
     data = load_mappings()
     if slug in data:
-        return await home(request, error="❌ Slug already exists. Please choose another.")
+        return await home(request, error="Slug already exists. Please choose another.")
 
     data[slug] = url
     save_mappings(data)
@@ -100,7 +161,12 @@ async def create_link(
 
 @app.get("/{slug}", include_in_schema=False)
 async def redirect_to_destination(slug: str):
+    """
+    Redirect the user to the destination URL for a given slug.
+    If the slug isn't found, return a 404.
+    """
     data = load_mappings()
     if slug not in data:
         raise HTTPException(status_code=404, detail="Slug not found")
+
     return RedirectResponse(data[slug])
